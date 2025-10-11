@@ -22,15 +22,15 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             cd marvelly
-            if [ ! -d "payprod/.git" ]; then
+            if [ ! -d "paygate/.git" ]; then
               echo "Repository not found, cloning..."
-              git clone git@github.com:Marvellye/multi-payment-gateway.git payprod
+              git clone git@github.com:Marvellye/multi-payment-gateway.git paygate
             else
               echo "Repository exists, updating..."
-              cd payprod
+              cd paygate
               git fetch origin
               git reset --hard origin/main
               exit 0
             fi
-            cd payprod
+            cd paygate
             git checkout main
