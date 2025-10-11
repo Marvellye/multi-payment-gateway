@@ -24,7 +24,7 @@ jobs:
             cd marvelly
             if [ ! -d "payprod/.git" ]; then
               echo "Repository not found, cloning..."
-              git clone git@github.com:Marvellye/inbix.git payprod
+              git clone git@github.com:Marvellye/multi-payment-gateway.git payprod
             else
               echo "Repository exists, updating..."
               cd payprod
