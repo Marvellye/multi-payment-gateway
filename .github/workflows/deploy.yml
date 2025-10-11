@@ -1,0 +1,36 @@
+name: Deploy to cPanel via SSH
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd marvelly
+            if [ ! -d "payprod/.git" ]; then
+              echo "Repository not found, cloning..."
+              git clone git@github.com:Marvellye/inbix.git payprod
+            else
+              echo "Repository exists, updating..."
+              cd payprod
+              git fetch origin
+              git reset --hard origin/main
+              exit 0
+            fi
+            cd payprod
+            git checkout main
