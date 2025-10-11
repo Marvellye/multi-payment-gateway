@@ -6,7 +6,7 @@ use Medoo\Medoo;
 class Transaction
 {
     protected $db;
-    protected $table = 'transactions';
+    protected $table = 'transaction';
 
     public function __construct()
     {
