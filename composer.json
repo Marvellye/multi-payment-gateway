@@ -1,17 +1,19 @@
 {
     "autoload": {
         "psr-4": {
-            "App\\": "src/"
+            "App\\": "App/"
         }
     },
     "require": {
         "flightphp/core": "^3.16",
-        "guzzlehttp/guzzle": "^7.0",
         "vlucas/phpdotenv": "^5.6",
         "jenssegers/blade": "^1.4",
         "illuminate/view": "^8.0",
         "illuminate/events": "^8.0",
         "illuminate/filesystem": "^8.0",
-        "illuminate/container": "^8.0"
+        "illuminate/container": "^8.0",
+        "catfan/medoo": "^2.2",
+        "spatie/ignition": "^1.15",
+        "guzzlehttp/guzzle": "^7.9"
     }
 }

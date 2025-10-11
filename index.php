@@ -1,25 +1,29 @@
 <?php
-
-require './vendor/autoload.php'; // Ensure you load Composer's autoload
+require './vendor/autoload.php'; 
 date_default_timezone_set('Africa/Lagos');
 use Dotenv\Dotenv;
+use Medoo\Medoo;
 use Jenssegers\Blade\Blade;
+use Spatie\Ignition\Ignition;
+use App\Middleware\SecurityMiddleware;
 
-// Load environment variables from .env file
 $dotenv = Dotenv::createImmutable(__DIR__);
-$dotenv->load();  
+$dotenv->load(); 
+SecurityMiddleware::apply();
+$ignition = Ignition::make()
+    ->applicationPath(__DIR__)
+    ->useDarkMode()
+    ->shouldDisplayException($_ENV['APP_ENV'] === 'local')
+    ->register();
 
-$dsn = "mysql:host={$_ENV['DB_HOST']};dbname={$_ENV['DB_NAME']};charset=utf8mb4";
-$options = [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-];
-
-try {
-    $pdo = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASSWORD'], $options);
-} catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
-}
+Flight::set('db', new Medoo([
+    'type' => 'mysql',
+    'host' => $_ENV['DB_HOST'],
+    'database' => $_ENV['DB_NAME'],
+    'username' => $_ENV['DB_USER'],
+    'password' => $_ENV['DB_PASSWORD'],
+    'charset' => 'utf8mb4'
+]));
 
 //Declare assets function
 function asset($path) {
@@ -54,52 +58,40 @@ Flight::map('notFound', function(){
             'success' => 'false',
             'status' => '404',
             'message' => 'Sorry, the page you are looking for does not exist',
-            'api_url' => $_ENV[BASE_URL]
+            'api_url' => $_ENV['BASE_URL']
             ]);
+});
+Flight::map('error', function(Throwable $e) use ($ignition) {
+    if ($_ENV['APP_ENV'] === 'local') {
+        $ignition->handleException($e);
+    } else {
+        Flight::response()->status(500);
+        echo Flight::get('blade')->render('errors.500', [
+            'title' => 'Server Error',
+            'message' => 'Something went wrong. Please try again later.'
+        ]);
+    }
 });
 
 Flight::route('/', function () {
     echo Flight::get('blade')->render('index', ['title' => 'Marvelly Payment Gateway']);
 });
 
-Flight::group('/live', function() use ($pdo){ 
+Flight::group('/live', function(){ 
     //Paystack
-    Flight::route('GET /paystack', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackController($pdo);
-        $controller->index();
-    });
-    Flight::route('GET /paystack/inline', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackController($pdo);
-        $controller->inline();
-    });
-    Flight::route('GET /paystack/init', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackController($pdo);
-        $controller->init();
-    });
-    Flight::route('GET /paystack/verify', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackController($pdo);
-        $controller->verify();
-    });
+    Flight::route('GET /paystack', ['App\Controllers\PaystackController', 'index']);
+    Flight::route('GET /paystack/inline', ['App\Controllers\PaystackController', 'inline']);
+    Flight::route('GET /paystack/init', ['App\Controllers\PaystackController', 'init']);
+    Flight::route('GET /paystack/verify', ['App\Controllers\PaystackController', 'verify']);
 });
 
-Flight::group('/test', function() use ($pdo){ 
+Flight::group('/test', function(){ 
     //Paystack
-    Flight::route('GET /paystack', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackTestController($pdo);
-        $controller->index();
-    });
-    Flight::route('GET /paystack/inline', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackTestController($pdo);
-        $controller->inline();
-    });
-    Flight::route('GET /paystack/init', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackTestController($pdo);
-        $controller->init();
-    });
-    Flight::route('GET /paystack/verify', function() use ($pdo) {
-        $controller = new App\Controllers\PaystackTestController($pdo);
-        $controller->verify();
-    });
+    Flight::route('GET /paystack', ['App\Controllers\PaystackTestController', 'index']);
+    Flight::route('GET /paystack/inline', ['App\Controllers\PaystackTestController', 'inline']);
+    Flight::route('GET /paystack/init', ['App\Controllers\PaystackTestController', 'init']);
+    Flight::route('GET /paystack/verify', ['App\Controllers\PaystackTestController', 'verify']);
 });
+
 
 Flight::start();

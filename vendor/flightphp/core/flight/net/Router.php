@@ -30,6 +30,13 @@ class Router
     protected array $routes = [];
 
     /**
+     * Routes grouped by HTTP method for faster lookups
+     *
+     * @var array<string, array<int, Route>>
+     */
+    protected array $routesByMethod = [];
+
+    /**
      * The current route that is has been found and executed.
      */
     public ?Route $executedRoute = null;
@@ -82,6 +89,7 @@ class Router
     public function clear(): void
     {
         $this->routes = [];
+        $this->routesByMethod = [];
     }
 
     /**
@@ -118,6 +126,11 @@ class Router
             if (in_array('GET', $methods, true) === true && in_array('HEAD', $methods, true) === false) {
                 $methods[] = 'HEAD';
             }
+
+            // Always allow an OPTIONS request
+            if (in_array('OPTIONS', $methods, true) === false) {
+                $methods[] = 'OPTIONS';
+            }
         }
 
         // And this finishes it off.
@@ -133,6 +146,14 @@ class Router
         }
 
         $this->routes[] = $route;
+
+        // Group routes by HTTP method for faster lookups
+        foreach ($methods as $method) {
+            if (!isset($this->routesByMethod[$method])) {
+                $this->routesByMethod[$method] = [];
+            }
+            $this->routesByMethod[$method][] = $route;
+        }
 
         return $route;
     }
@@ -228,17 +249,48 @@ class Router
      */
     public function route(Request $request)
     {
-        while ($route = $this->current()) {
-            $urlMatches = $route->matchUrl($request->url, $this->caseSensitive);
-            $methodMatches = $route->matchMethod($request->method);
-            if ($urlMatches === true && $methodMatches === true) {
-                $this->executedRoute = $route;
-                return $route;
-                // capture the route but don't execute it. We'll use this in Engine->start() to throw a 405
-            } elseif ($urlMatches === true && $methodMatches === false) {
-                $this->executedRoute = $route;
+        $requestMethod = $request->method;
+        $requestUrl = $request->url;
+
+        // If we're in the middle of iterating (index > 0), continue with the original iterator logic
+        // This handles cases where the Engine calls next() and continues routing (e.g., when routes return true)
+        if ($this->index > 0) {
+            while ($route = $this->current()) {
+                $urlMatches = $route->matchUrl($requestUrl, $this->caseSensitive);
+                $methodMatches = $route->matchMethod($requestMethod);
+                if ($urlMatches === true && $methodMatches === true) {
+                    $this->executedRoute = $route;
+                    return $route;
+                } elseif ($urlMatches === true && $methodMatches === false) {
+                    $this->executedRoute = $route;
+                }
+                $this->next();
             }
-            $this->next();
+            return false;
+        }
+
+        // Fast path: check method-specific routes first, then wildcard routes (only on first routing attempt)
+        $methodsToCheck = [$requestMethod, '*'];
+        foreach ($methodsToCheck as $method) {
+            if (isset($this->routesByMethod[$method])) {
+                foreach ($this->routesByMethod[$method] as $route) {
+                    if ($route->matchUrl($requestUrl, $this->caseSensitive)) {
+                        $this->executedRoute = $route;
+                        // Set iterator position to this route for potential next() calls
+                        $this->index = array_search($route, $this->routes, true);
+                        return $route;
+                    }
+                }
+            }
+        }
+
+        // If no exact match found, check all routes for 405 (method not allowed) cases
+        // This maintains the original behavior where we capture routes that match URL but not method
+        foreach ($this->routes as $route) {
+            if ($route->matchUrl($requestUrl, $this->caseSensitive) && !$route->matchMethod($requestMethod)) {
+                $this->executedRoute = $route; // Capture for 405 error in Engine
+                // Don't return false yet, continue checking for other potential matches
+            }
         }
 
         return false;
