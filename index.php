@@ -83,6 +83,9 @@ Flight::group('/live', function(){
     Flight::route('GET /paystack/inline', ['App\Controllers\PaystackController', 'inline']);
     Flight::route('GET /paystack/init', ['App\Controllers\PaystackController', 'init']);
     Flight::route('GET /paystack/verify', ['App\Controllers\PaystackController', 'verify']);
+    //Squad
+    Flight::route('GET /squad/init', ['App\Controllers\SquadTestController', 'init']);
+    Flight::route('GET /squad/verify', ['App\Controllers\SquadTestController', 'verify']);
 });
 
 Flight::group('/test', function(){ 
@@ -91,7 +94,9 @@ Flight::group('/test', function(){
     Flight::route('GET /paystack/inline', ['App\Controllers\PaystackTestController', 'inline']);
     Flight::route('GET /paystack/init', ['App\Controllers\PaystackTestController', 'init']);
     Flight::route('GET /paystack/verify', ['App\Controllers\PaystackTestController', 'verify']);
+    //squad
+    Flight::route('GET /squad/init', ['App\Controllers\SquadTestController', 'init']);
+    Flight::route('GET /squad/verify', ['App\Controllers\SquadTestController', 'verify']);
 });
-
 
 Flight::start();

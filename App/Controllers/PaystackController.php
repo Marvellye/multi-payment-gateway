@@ -118,6 +118,22 @@ public function verify()
         ], 400);
     }
 
+    
+    $this->transactionModel = new Transaction();
+
+    // Check if transaction already exists in the database
+    $existingTransaction = $this->transactionModel->findByReference($reference);
+
+    if ($existingTransaction) {
+        // If it exists, return data from the database without calling the API
+        return Flight::json([
+            'status' => true,
+            'message' => 'Transaction previously verified and retrieved from log',
+            'data' => $existingTransaction
+        ]);
+    }
+
+
     try {
         $client = new \GuzzleHttp\Client();
         $response = $client->get("{$this->baseUrl}/transaction/verify/{$reference}", [
@@ -139,12 +155,8 @@ public function verify()
 
         $data = $body['data'];
 
-        $this->transactionModel = new Transaction();
-
-        // Check if transaction already exists
-        $exists = $this->transactionModel->findByReference($data['reference']);
-
-        if (!$exists) {
+        // Since we checked above and it didn't exist, we now insert it.
+        if ($data['status'] === 'success') {
             // Insert new transaction
             $transactionData = [
                 'email'     => $data['customer']['email'] ?? '',

@@ -8,10 +8,11 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\FileCookieJar;
 use GuzzleHttp\Exception\RequestException;
 
-class PaystackTestController 
+class SquadTestController 
 {
     private $pdo;
     private $baseUrl;
+    private $baseTestUrl;
     private $secretKey;
     private $publicKey;
     private $secretKeytest;
@@ -19,80 +20,49 @@ class PaystackTestController
     private $transactionModel;
     public function __construct()
     {
-        // $this->pdo = $pdo; // No longer needed
-        $this->baseUrl           = $_ENV['PAYSTACK_BASE_URL'];
-        $this->secretKey         = $_ENV['PAYSTACK_SECRET'];
-        $this->publicKey         = $_ENV['PAYSTACK_PUBLIC'];
-        $this->secretKeytest     = $_ENV['PAYSTACK_SECRET_TEST'];
-        $this->publicKeytest     = $_ENV['PAYSTACK_PUBLIC_TEST'];
+        $this->baseUrl           = $_ENV['SQUAD_BASE_URL'];
+        $this->baseTestUrl       = $_ENV['SQUAD_BASE_URL_TEST'];
+        $this->secretKey         = $_ENV['SQUAD_SECRET'];
+        $this->publicKey         = $_ENV['SQUAD_PUBLIC'];
+        $this->secretKeytest     = $_ENV['SQUAD_SECRET_TEST'];
+        $this->publicKeytest     = $_ENV['SQUAD_PUBLIC_TEST'];
     }
     
-    public function index()
-    {
-        echo Flight::get('blade')->render('paystack.index', [
-            'publicKey' => $this->publicKeytest
-            ]);
-    }
     
-    public function inline()
-    {
-        $request = Flight::request()->query;
-
-        echo Flight::get('blade')->render('paystack.inline', [
-            'publicKey'   => $this->publicKeytest,
-            'email'       => $request['email'] ?? '',
-            'amount'      => $request['amount'] ?? '',
-            'firstName'   => $request['first_name'] ?? '',
-            'lastName'    => $request['last_name'] ?? '',
-            'phone'       => $request['phone'] ?? '',
-            'callbackUrl' => $request['callback_url'] ?? ''
-        ]);
-    }
-
     public function init() 
     {
     $r = Flight::request()->query;
     $email = $r['email'] ?? '';
     $amount = isset($r['amount']) ? intval($r['amount']) * 100 : 0;
     $callback = $r['callback_url'] ?? '';
-    $ref = $r['ref'] ?? '';
+    $ref = $r['ref'] ?? time() . rand(1000, 9999);
     $redirect = isset($r['red']) && $r['red'] === 'true';
 
     try {
         $client = new \GuzzleHttp\Client();
-        $response = $client->post("{$this->baseUrl}/transaction/initialize", [
+        $response = $client->post("{$this->baseTestUrl}/transaction/Initiate", [
             'headers' => [
                 'Authorization' => "Bearer {$this->secretKeytest}",
                 'Accept'        => 'application/json',
                 'Content-Type'  => 'application/json',
             ],
             'json' => [
-                'email'        => $email,
-                'amount'       => $amount,
-                'callback_url' => $callback,
-                'reference'    => $ref,
-                'metadata' => [ 'custom_fields' => [
-                    [
-                        'display_name'   => 'Full Name',
-                        'variable_name'  => 'full_name',
-                        'value'          => trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''))
-                    ],
-                    [
-                        'display_name'   => 'Phone Number',
-                        'variable_name'  => 'phone_number',
-                        'value'          => $r['phone'] ?? ''
-                    ]
-                ]]
+                'email'           => $email,
+                'amount'          => $amount,
+                'callback_url'    => $callback,
+                'transaction_ref' => $ref,
+                'initiate_type'   => 'inline',
+                'currency'        => 'NGN',
             ]
         ]);
 
         $body = json_decode($response->getBody(), true);
 
-        $checkout_url = $body['data']['authorization_url'] ?? null;
-        $reference = $body['data']['reference'] ?? null;
+        $checkout_url = $body['data']['checkout_url'] ?? null;
+        $reference = $body['data']['transaction_ref'] ?? null;
 
-        if ($redirect && isset($body['data']['authorization_url'])) {
-            Flight::redirect($body['data']['authorization_url']);
+        if ($redirect && isset($body['data']['checkout_url'])) {
+            Flight::redirect($body['data']['checkout_url']);
             return;
         }
 
@@ -142,10 +112,9 @@ public function verify()
         ]);
     }
 
-
     try {
         $client = new \GuzzleHttp\Client();
-        $response = $client->get("{$this->baseUrl}/transaction/verify/{$reference}", [
+        $response = $client->get("{$this->baseTestUrl}/transaction/verify/{$reference}", [
             'headers' => [
                 'Authorization' => "Bearer {$this->secretKeytest}",
                 'Accept'        => 'application/json',
@@ -165,37 +134,35 @@ public function verify()
         $data = $body['data'];
 
         // Since we checked above and it didn't exist, we now insert it.
-        if ($data['status'] === 'success') {
             // Insert new transaction
             $transactionData = [
-                'email'     => $data['customer']['email'] ?? '',
-                'amount'    => $data['amount'] / 100, // Convert from kobo to naira
-                'reference' => $data['reference'],
-                'status'    => $data['status'],
-                'fees'      => ($data['fees'] ?? 0) / 100,
-                'paid_at'   => $data['paid_at'],
-                'channel'   => $data['channel'],
-                'currency'  => $data['currency'],
+                'email'     => $data['email'] ?? '',
+                'amount'    => $data['transaction_amount'] / 100,
+                'reference' => $data['transaction_ref'],
+                'status'    => $data['transaction_status'],
+                'fees'      => 0.00,
+                'paid_at'   => $data['created_at'],
+                'channel'   => $data['transaction_type'],
+                'currency'  => $data['transaction_currency_id'],
                 'ip_address'=> $data['ip_address'] ?? '',
-                'service'   => 'paystack'
+                'service'   => 'squad'
             ];
             $this->transactionModel->create($transactionData);
-        }
 
         return Flight::json([
             'status' => true,
             'message' => 'Transaction verified and logged',
             'data' => [
-                'email'     => $data['customer']['email'] ?? '',
-                'amount'    => $data['amount'] / 100,
-                'reference' => $data['reference'],
-                'status'    => $data['status'],
-                'fees'      => ($data['fees'] ?? 0) / 100,
-                'paid_at'   => $data['paid_at'],
-                'channel'   => $data['channel'],
-                'currency'  => $data['currency'],
+                'email'     => $data['email'] ?? '',
+                'amount'    => $data['transaction_amount'] / 100,
+                'reference' => $data['transaction_ref'],
+                'status'    => $data['transaction_status'],
+                'fees'      => 0.00,
+                'paid_at'   => $data['created_at'],
+                'channel'   => $data['transaction_type'],
+                'currency'  => $data['transaction_currency_id'],
                 'ip_address'=> $data['ip_address'] ?? '',
-                'service'   => 'paystack'
+                'service'   => 'squad'
             ]//$data
         ]);
 
